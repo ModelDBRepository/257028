@@ -1,0 +1,60 @@
+/* Author: Xu Zhang @UConn, Jan., 2019
+Synaptic mechanisms between NO-ION and DCN-RN-ION
+This script cannot be executed individually
+*/
+
+// Synaptic noise to ION
+objref ION_noisyn
+ION_noisyn = new Random(DCN2IONrnd)
+ION_noisyn.normal(0, 1e-12*noiseSwitch)
+
+// Nucleo-olivary inhibitory pathway
+objref NO2ION_syn[8], NC_NO2ION_syn[8]
+
+for i = 0,7 {
+IONcell[i] NO2ION_syn[i] = new NoisyExp2Syn(0.55)
+}
+
+// GABA synapse NO-ION
+for i = 0,7 {
+	NO2ION_syn[i].tau1 = 40 // (ms)
+	NO2ION_syn[i].tau2 = 180 // (ms)
+	NO2ION_syn[i].e = -65 // Lefler et al., 2014
+	NOcell NC_NO2ION_syn[i] = new NetCon(&v(0.5), NO2ION_syn[i], -40, 45, 3e-5)
+	// Synaptic noise
+	ION_noisyn.play(&NO2ION_syn[i].noise)
+}
+
+objref NC_NO2IONgap_1[8], NC_NO2IONgap_2[8], NC_NO2IONgap_3[8]
+
+// Decoupling effects of NO-ION GABA
+for i = 0,7 {
+	gapjunc_1[i].tau1 = 40 // (ms)
+	gapjunc_1[i].tau2 = 180 // (ms)
+	NOcell NC_NO2IONgap_1[i] = new NetCon(&v(0.5), gapjunc_1[i], -40, 45, 0.15)
+	
+	gapjunc_2[i].tau1 = 40 // (ms)
+	gapjunc_2[i].tau2 = 180 // (ms)
+	NOcell NC_NO2IONgap_2[i] = new NetCon(&v(0.5), gapjunc_2[i], -40, 45, 0.15)
+	
+	gapjunc_3[i].tau1 = 40 // (ms)
+	gapjunc_3[i].tau2 = 180 // (ms)
+	NOcell NC_NO2IONgap_3[i] = new NetCon(&v(0.5), gapjunc_3[i], -40, 45, 0.15)
+}
+
+// DCN-Red nucleus-ION excitatory pathway
+objref DCN2RN2ION_syn[8], NC_DCN2RN2ION_syn[8]
+
+for i = 0,7 {
+IONcell[i] DCN2RN2ION_syn[i] = new NoisyExp2Syn(0.65)
+}
+
+// Excitatory synapse DCN-RN-ION (RN: red nucleus)
+for i = 0,7 {
+	DCN2RN2ION_syn[i].tau1 = 2	// (ms)
+	DCN2RN2ION_syn[i].tau2 = 10 // (ms)
+	DCN2RN2ION_syn[i].e = 0
+	DCNcell NC_DCN2RN2ION_syn[i] = new NetCon(&v(0.5), DCN2RN2ION_syn[i], -40, 15, 1e-5) // Delay estimated from Ruigrok and Voogd, 1995; Oka and Jinnai, 1978
+	// Synaptic noise
+	ION_noisyn.play(&DCN2RN2ION_syn[i].noise)
+}

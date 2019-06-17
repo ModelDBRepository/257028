@@ -1,0 +1,69 @@
+/* Author: Xu Zhang @UConn, Jan., 2019
+Synaptic mechanisms between ION-PC and ION-DCN
+This script cannot be executed individually
+*/
+
+objref ION2PC_noisyn
+ION2PC_noisyn = new Random(ION2PCrnd)
+ION2PC_noisyn.normal(0, 5e-9*noiseSwitch)
+
+// 1st spike
+objref ION2PC_syn_ampa[40], NC_ION2PC_syn_ampa[40]
+
+for i = 0,39 {
+	PCcell[i] ION2PC_syn_ampa[i] = new NoisyExpSyn(0)
+
+	// GLUT syn_epscapse IO-PC
+	ION2PC_syn_ampa[i].tau = 0.6 // ION2PC_tau[i] // (ms) triggers complex spike
+	ION2PC_syn_ampa[i].e = 0
+	IONcell[int(i/5)] NC_ION2PC_syn_ampa[i] = new NetCon(&v(0.5), ION2PC_syn_ampa[i], -40, 4, 4e-3) // Delay determined from Sugihara et al., 1993
+	ION2PC_noisyn.play(&ION2PC_syn_ampa[i].noise)
+}
+
+// Synaptic transport current (Otis et al., 1997)
+objref ION2PC_syn_nmda[40], NC_ION2PC_syn_nmda[40]
+
+for i = 0,39 {
+	PCcell[i] ION2PC_syn_nmda[i] = new NoisyExp2Syn(0.2)
+
+	ION2PC_syn_nmda[i].tau1 = 2.63
+	ION2PC_syn_nmda[i].tau2 = 28
+	ION2PC_syn_nmda[i].e = 0
+	IONcell[int(i/5)] NC_ION2PC_syn_nmda[i] = new NetCon(&v(0.5), ION2PC_syn_nmda[i], -40, 4, 2.5e-3)
+	ION2PC_noisyn.play(&ION2PC_syn_nmda[i].noise)
+}
+
+// Long-latency suppression
+objref ION2PC_syn_ipsc[40], NC_ION2PC_syn_ipsc[40]
+
+// Varying IO-SUP-PC synaptic tc
+double ION2PC_tau_ipsc[40]
+
+objref rngION2PCipsc
+rngION2PCipsc = new Random(ION2PCipscrnd)
+rngION2PCipsc.normal(80,100)
+
+for i = 0,39 {
+	PCcell[i] ION2PC_syn_ipsc[i] = new NoisyExp2Syn(0.4)
+
+	ION2PC_syn_ipsc[i].tau1 = 5 // (ms) triggers complex spike
+	ION2PC_syn_ipsc[i].tau2 = rngION2PCipsc.repick() // mean = 80, std = 10 // (ms) triggers complex spike
+	ION2PC_syn_ipsc[i].e = -65
+	IONcell[int(i/5)] NC_ION2PC_syn_ipsc[i] = new NetCon(&v(0.5), ION2PC_syn_ipsc[i], -40, 14, 0.01)
+	ION2PC_noisyn.play(&ION2PC_syn_ipsc[i].noise)
+}
+
+
+// Glutamate IO-DCN
+objref ION2DCN_noisyn
+ION2DCN_noisyn = new Random(ION2DCNrnd)
+ION2DCN_noisyn.normal(0, 1e-10*noiseSwitch)
+
+objref ION2DCN_syn_ampa, NC_ION2DCN_syn_ampa
+DCNcell ION2DCN_syn_ampa = new NoisyExpSyn(0.7)
+
+// GLUT syn_epscapse IO-PC
+ION2DCN_syn_ampa.tau = 0.8 // ION2PC_tau // (ms) triggers complex spike
+ION2DCN_syn_ampa.e = 0
+IONcell[0] NC_ION2DCN_syn_ampa = new NetCon(&v(0.5), ION2DCN_syn_ampa, -40, 2.5, 5e-3) // Delay determined from Najac and Raman, 2017
+ION2DCN_noisyn.play(&ION2DCN_syn_ampa.noise)

@@ -1,0 +1,325 @@
+/* Author: Xu Zhang @UConn, Jan., 2019
+Full model under one typical normal condition as indicated in Figure 6ACEG
+
+Spike timings of every cell, membrane voltage traces of all IONs
+and one of the PCs (no.19 of 0-39) are recorded and saved inside the
+"./recordings/NORM_scaleup/" folder.
+*/
+
+load_file("nrngui.hoc")
+
+load_file("rngRead.hoc") // Load rng seeds
+noiseSwitch=1 // Membrane and synaptic noises, 1/0 = turn on/off
+dt = 0.0125 // Cannot be set larger, otherwise ION and DCN would have different properties
+v_init = -57
+tstop = 5000 // Simulation period
+
+// Loading individual cells
+load_file("cell_ION.hoc")
+load_file("cell_PC.hoc")
+load_file("cell_DCN.hoc")
+load_file("cell_TC.hoc")
+load_file("cell_MC.hoc")
+
+// Loading synaptic connections
+load_file("syn_ION_PC.hoc")
+load_file("syn_PC_DCN.hoc")
+load_file("syn_DCN_ION.hoc")
+load_file("syn_DCN_TC.hoc")
+load_file("syn_TC_MC.hoc")
+load_file("syn_MC_GrL.hoc")
+load_file("syn_GrL_PC.hoc")
+
+// One typical NORM_scaleup condition (tau = 12, R = 0.7)
+PCDCNtaurnd = 682
+PCDCNgrnd = 198
+objref rngPCDCNtau, PCDCNg
+rngPCDCNtau = new Random(PCDCNtaurnd)
+rngPCDCNtau.normal(2.4,0.16)
+PCDCNg = new Random(PCDCNgrnd)
+PCDCNg.normal(1,0.04)
+
+for i = 0,199 {
+	PC2DCN_syn[i].tau = rngPCDCNtau.repick()
+	PC2DCN_syn[i].g = PC2DCN_syn[i].g*PCDCNg.repick()
+}
+
+// Push ION into oscillations
+objref stimION[40]
+for i = 0,39 {
+	IONcell[i] stimION[i] = new IClamp(0.5)
+	stimION[i].amp = 1.5e-2
+	stimION[i].del = 1500
+	stimION[i].dur = 15
+}
+
+access DCNcell[0]
+
+// Record GrL
+objref apGrC[20]
+for i = 0,19 {
+	apGrC[i] = new Vector()
+	syn_grcsc_ampa[i].record(apGrC[i])
+}
+objref apGoC[20]
+for i = 0,19 {
+	apGoC[i] = new Vector()
+	syn_gocgrc_gaba[i].record(apGoC[i])
+}
+objref apSTL[20]
+for i = 0,19 {
+	apSTL[i] = new Vector()
+	syn_scgoc_gaba[i].record(apSTL[i])
+}
+
+// Record PC (Must be included)
+objref rec_v_PC[200]
+for i = 0,199 {
+	rec_v_PC[i] = new Vector()
+	rec_v_PC[i].record(&PCcell[i].v(0.5))
+}
+
+// Record PC APs
+objref apc_PC[200], apPC[200]
+for i = 0,199 {
+PCcell[i] apc_PC[i] = new APCount(0.5)
+apc_PC[i].thresh = -45
+apPC[i] = new Vector()
+apc_PC[i].record(apPC[i])
+}
+
+// Record ION
+objref apc_ION[40], apION[40]
+for i = 0,39 {
+IONcell[i] apc_ION[i] = new APCount(0.5)
+apc_ION[i].thresh = -45
+apION[i] = new Vector()
+apc_ION[i].record(apION[i])
+}
+
+// Record ION membrane voltage
+objref rec_v_ION[40]
+for i = 0,7 {
+rec_v_ION[i] = new Vector()
+rec_v_ION[i].record(&IONcell[i].v(0.5))
+}
+
+// Record NO
+objref apc_NO[5], apNO[5]
+for i = 0,4 {
+	NOcell[i] apc_NO[i] = new APCount(0.5)
+	apc_NO[i].thresh = -30
+	apNO[i] = new Vector()
+	apc_NO[i].record(apNO[i])
+}
+
+// Record DCN
+objref apc_DCN[5], apDCN[5]
+for i = 0,4 {
+	DCNcell[i] apc_DCN[i] = new APCount(0.5)
+	apc_DCN[i].thresh = -30
+	apDCN[i] = new Vector()
+	apc_DCN[i].record(apDCN[i])
+}
+
+// Record Vim
+objref apc_Vim[5], apVim[5]
+for i = 0,4 {
+	TCcell[i] apc_Vim[i] = new APCount(0.5)
+	apc_Vim[i].thresh = -30
+	apVim[i] = new Vector()
+	apc_Vim[i].record(apVim[i])
+}
+
+// Record PYN
+objref apc_PYN[100], apPYN[100]
+for i = 0,99 {
+	PYcell[i] apc_PYN[i] = new APCount(0.5)
+	apc_PYN[i].thresh = -30
+	apPYN[i] = new Vector()
+	apc_PYN[i].record(apPYN[i])
+}
+
+// Record FSI
+objref apc_FSI[10], apFSI[10]
+for i = 0,9 {
+	FScell[i] apc_FSI[i] = new APCount(0.5)
+	apc_FSI[i].thresh = -30
+	apFSI[i] = new Vector()
+	apc_FSI[i].record(apFSI[i])
+}
+
+
+//////////////////////////////////////////////////////////////////
+// Simulation starts											//
+//																//
+// Set up synaptic transmission delays between PC-DCN and PC-NO	//
+proc advance() {
+	if (t>PC2DCN_delay) {
+		for i = 0,199 {
+			PC2DCN_syn[i].vpre = rec_v_PC[i].x[rec_v_PC[i].size()-PC2DCN_delay/dt] // PC2DCN_delay defined in syn_PC_DCN.hoc
+			PC2NO_syn[i].vpre = rec_v_PC[i].x[rec_v_PC[i].size()-PC2NO_delay/dt]
+		}
+	}
+	fadvance()
+}
+
+objectvar Vplot1 //, Vplot2, Vplot3
+{
+Vplot1 = new Graph(0)
+Vplot1.size(0,tstop,-100,80)
+{Vplot1.view(0, -100, tstop, 180, 500, 50, 700, 180)}
+graphList[0].append(Vplot1)
+Vplot1.save_name("graphList[0].")
+Vplot1.addvar("PCcell[140].v( 0.5 )", 1, 1, 0.8, 0.9, 2)
+Vplot1.addvar("DCNcell[4].v( 0.5 )", 2, 1, 0.8, 0.9, 2)
+}
+
+run()															//
+//																//
+//////////////////////////////////////////////////////////////////
+
+// Save GrC APs
+objref rec_GrC
+rec_GrC = new File()
+rec_GrC.wopen("recordings/NORM_scaleup/ap_GrC.txt")
+for i = 0,19 {
+	for j = 0,apGrC[i].size()-1 {
+		if (apGrC[i].size()>0) {
+			rec_GrC.printf("%d,%f\n",i,apGrC[i].x(j)) // Column 1 indicates no. of the PC (0-39) that corresponds to the AP (Column 2)
+		}
+	}
+}
+rec_GrC.close()
+
+// Save GoC APs
+objref rec_GoC
+rec_GoC = new File()
+rec_GoC.wopen("recordings/NORM_scaleup/ap_GoC.txt")
+for i = 0,19 {
+	for j = 0,apGoC[i].size()-1 {
+		if (apGoC[i].size()>0) {
+			rec_GoC.printf("%d,%f\n",i,apGoC[i].x(j)) // Column 1 indicates no. of the PC (0-39) that corresponds to the AP (Column 2)
+		}
+	}
+}
+rec_GoC.close()
+
+// Save STL APs
+objref rec_STL
+rec_STL = new File()
+rec_STL.wopen("recordings/NORM_scaleup/ap_STL.txt")
+for i = 0,19 {
+	for j = 0,apSTL[i].size()-1 {
+		if (apSTL[i].size()>0) {
+			rec_STL.printf("%d,%f\n",i,apSTL[i].x(j)) // Column 1 indicates no. of the PC (0-39) that corresponds to the AP (Column 2)
+		}
+	}
+}
+rec_STL.close()
+
+// Save PC (Just one PC)
+objref sav_v_PC
+sav_v_PC = new File()
+sav_v_PC.wopen("recordings/NORM_scaleup/PC_v_all.txt")
+rec_v_PC[139].printf(sav_v_PC)
+sav_v_PC.close()
+
+// Save PC APs
+objref rec_PC
+rec_PC = new File()
+rec_PC.wopen("recordings/NORM_scaleup/ap_PC.txt")
+for i = 0,199 {
+	for j = 0,apPC[i].size()-1 {
+		if (apPC[i].size()>0) {
+			rec_PC.printf("%d,%f\n",i,apPC[i].x(j)) // Column 1 indicates no. of the PC (0-39) that corresponds to the AP (Column 2)
+		}
+	}
+}
+rec_PC.close()
+
+
+// Save ION (Just one ION)
+objref sav_v_ION
+sav_v_ION = new File()
+sav_v_ION.wopen("recordings/NORM_scaleup/ION_v_all.txt")
+rec_v_ION[0].printf(sav_v_ION)
+sav_v_ION.close()
+
+// Save ION APs
+objref rec_ION
+rec_ION = new File()
+rec_ION.wopen("recordings/NORM_scaleup/ap_ION.txt")
+for i = 0,39 {
+	for j = 0,apION[i].size()-1 {
+		if (apION[i].size()>0) {
+			rec_ION.printf("%d,%f\n",i,apION[i].x(j)) // Column 1 indicates no. of the ION (0-7) that corresponds to the AP (Column 2)
+		}
+	}
+}
+rec_ION.close()
+
+// Save NO
+objref rec_NO
+rec_NO = new File()
+rec_NO.wopen("recordings/NORM_scaleup/ap_NO.txt")
+for i = 0,4 {
+	for j = 0,apNO[i].size()-1 {
+		if (apNO[i].size()>0) {
+			rec_NO.printf("%d,%f\n",i,apNO[i].x(j))
+		}
+	}
+}
+rec_NO.close()
+
+// Save DCN
+objref rec_DCN
+rec_DCN = new File()
+rec_DCN.wopen("recordings/NORM_scaleup/ap_DCN.txt")
+for i = 0,4 {
+	for j = 0,apDCN[i].size()-1 {
+		if (apDCN[i].size()>0) {
+			rec_DCN.printf("%d,%f\n",i,apDCN[i].x(j))
+		}
+	}
+}
+rec_DCN.close()
+
+// Save Vim
+objref rec_Vim
+rec_Vim = new File()
+rec_Vim.wopen("recordings/NORM_scaleup/ap_Vim.txt")
+for i = 0,4 {
+	for j = 0,apVim[i].size()-1 {
+		if (apVim[i].size()>0) {
+			rec_Vim.printf("%d,%f\n",i,apVim[i].x(j))
+		}
+	}
+}
+rec_Vim.close()
+
+// Save PYN
+objref PYN_all
+PYN_all = new Vector()
+objref rec_PYN
+rec_PYN = new File()
+for i = 0,99 {
+	PYN_all.append(apPYN[i])
+}
+rec_PYN.wopen("recordings/NORM_scaleup/ap_PYN.txt")
+PYN_all.printf(rec_PYN)
+rec_PYN.close()
+
+// Save FSI
+objref FSI_all
+FSI_all = new Vector()
+objref rec_FSI
+rec_FSI = new File()
+for i = 0,9 {
+	FSI_all.append(apFSI[i])
+}
+rec_FSI.wopen("recordings/NORM_scaleup/ap_FSI.txt")
+FSI_all.printf(rec_FSI)
+rec_FSI.close()
+
+// quit()

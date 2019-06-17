@@ -1,0 +1,37 @@
+/* Author: Xu Zhang @UConn, Jan., 2019
+Synaptic mechanisms between GrL-PC (parallel fiber)
+This script cannot be executed individually
+*/
+
+// Synaptic noise to PC
+objref PC_noisyn
+PC_noisyn = new Random(GrL2PCrnd)
+PC_noisyn.normal(0, 5e-9*noiseSwitch)
+
+// Varying GrC-PC synaptic weights
+objref rngGrC2PCw
+rngGrC2PCw = new Random(GrC2PCwrnd)
+rngGrC2PCw.normal(1,0.5)
+
+// Varying GrC-PC synaptic delays
+objref rngGrC2PCd
+rngGrC2PCd = new Random(GrC2PCdrnd)
+rngGrC2PCd.uniform(0,10)
+
+objref GrC2PC_syn[40], NC_GrC2PC_syn[40]
+
+for i = 0,39 {
+	
+	PCcell[i] GrC2PC_syn[i] = new NoisyExp2Syn(0)
+
+	GrC2PC_syn[i].tau1 = 1.2
+	GrC2PC_syn[i].tau2 = 14 // Determined from Isope and Barbour, 2002
+	// GrC2PC_syn[i].tau = 200 // A different case reported in Atluri and Regehr, 2002
+	GrC2PC_syn[i].e = 0
+
+	// delay+3 because of earlier detection of artificial AP roughly by 3 ms due to GrL netevent() mechanisms
+	GRcell[int(i/10)] NC_GrC2PC_syn[i] = new NetCon(&v(0.9-i*0.001), GrC2PC_syn[i], -40, abs(rngGrC2PCd.repick())+3, abs(rngGrC2PCw.repick())*3.27e-5)
+
+	// Synaptic noise
+	PC_noisyn.play(&GrC2PC_syn[i].noise)
+}

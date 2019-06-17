@@ -1,0 +1,151 @@
+/* Author: Xu Zhang @UConn, Jul., 2018
+ION: inferior olivary nucleus neurons
+Modified from Schweighofer et al., 1999 and Torben-Nielson et al., 2012
+*/
+
+// To execute this script individually, please specify the following variables, e.g.:
+// IONrnd = 101 // rng seed
+// IONexrnd = 201
+// IONexstrnd = 301
+// noiseSwitch=1
+// dt = 0.0125
+
+create IONcell[8]
+
+for i = 0,7 {
+	access IONcell[i]
+    IONcell[i].nseg = 1
+    IONcell[i].L = 20
+    IONcell[i].diam = 20
+    IONcell[i].cm = 1 // (uF/cm2)
+	
+    insert ioKdr
+    insert ioNa
+    insert ioCa
+    insert pas
+	insert ioh
+	
+	IONcell[i].ek = -70   // (mV)
+	IONcell[i].ena = 55	// (mV)
+	IONcell[i].e_pas = -63
+     
+	IONcell[i].gbar_ioKdr = 9	// (mS/cm2)
+	IONcell[i].gbar_ioNa = 37 //+i	// (mS/cm2)
+	IONcell[i].gbar_ioh = 0.08 // (mS/cm2)
+	IONcell[i].gbar_ioCa = 0.27 // (mS/cm2)
+	// IONcell[i].gbar_ioh = 0.02 // (mS/cm2)
+	// IONcell[i].gbar_ioca = 0.3 // (mS/cm2) Harmaline
+	IONcell[i].g_pas = 0.13e-3 // +i*0.005e-3 // (S/cm2)
+}
+
+access IONcell[0]
+
+/////////////////////////
+// Gap junction geometry
+//
+// 0-------1
+// |\     /|
+// | 4---5 |
+// | |   | |
+// | 6---7 |
+// |/     \|
+// 2-------3
+//
+/////////////////////////
+
+objref gapjunc_1[8], gapjunc_2[8], gapjunc_3[8]
+
+for i = 0,7 {
+    IONcell[i] gapjunc_1[i] = new iogap()
+	IONcell[i] gapjunc_2[i] = new iogap()
+	IONcell[i] gapjunc_3[i] = new iogap()
+	
+	IONcell[i] gapjunc_1[i].loc(0.9)
+	IONcell[i] gapjunc_2[i].loc(0.8)
+	IONcell[i] gapjunc_3[i].loc(0.7)
+}
+
+setpointer gapjunc_1[0].vgap, IONcell[1].v(0.5)
+setpointer gapjunc_2[0].vgap, IONcell[2].v(0.5)
+setpointer gapjunc_3[0].vgap, IONcell[4].v(0.5)
+
+setpointer gapjunc_1[1].vgap, IONcell[0].v(0.5)
+setpointer gapjunc_2[1].vgap, IONcell[3].v(0.5)
+setpointer gapjunc_3[1].vgap, IONcell[5].v(0.5)
+
+setpointer gapjunc_1[2].vgap, IONcell[0].v(0.5)
+setpointer gapjunc_2[2].vgap, IONcell[3].v(0.5)
+setpointer gapjunc_3[2].vgap, IONcell[6].v(0.5)
+
+setpointer gapjunc_1[3].vgap, IONcell[1].v(0.5)
+setpointer gapjunc_2[3].vgap, IONcell[2].v(0.5)
+setpointer gapjunc_3[3].vgap, IONcell[7].v(0.5)
+
+setpointer gapjunc_1[4].vgap, IONcell[0].v(0.5)
+setpointer gapjunc_2[4].vgap, IONcell[5].v(0.5)
+setpointer gapjunc_3[4].vgap, IONcell[6].v(0.5)
+
+setpointer gapjunc_1[5].vgap, IONcell[1].v(0.5)
+setpointer gapjunc_2[5].vgap, IONcell[4].v(0.5)
+setpointer gapjunc_3[5].vgap, IONcell[7].v(0.5)
+
+setpointer gapjunc_1[6].vgap, IONcell[2].v(0.5)
+setpointer gapjunc_2[6].vgap, IONcell[4].v(0.5)
+setpointer gapjunc_3[6].vgap, IONcell[7].v(0.5)
+
+setpointer gapjunc_1[7].vgap, IONcell[3].v(0.5)
+setpointer gapjunc_2[7].vgap, IONcell[5].v(0.5)
+setpointer gapjunc_3[7].vgap, IONcell[6].v(0.5)
+
+max_gap_g = 5e-5
+
+// Varying ION gap junction strengths
+objref rngIONgapjg
+rngIONgapjg = new Random(IONgapjgrnd)
+rngIONgapjg.uniform(0.3,0.7)
+
+for i = 0,7 {
+	gapjunc_1[i].g = rngIONgapjg.repick() * max_gap_g
+	gapjunc_2[i].g = rngIONgapjg.repick() * max_gap_g
+	gapjunc_3[i].g = rngIONgapjg.repick() * max_gap_g
+}
+
+// Offset current
+objref ocION[8]
+for i = 0,7 {
+IONcell[i] ocION[i] = new IClamp(0.5)
+ocION[i].amp = -1.5e-3+0.5e-4*i // Normal
+// ocION[i].amp = -8e-4
+// ocION[i].amp = -8e-4+2e-5*i
+ocION[i].del = 0
+ocION[i].dur = 1e10
+}
+
+// External source of input to IO (that generate a <1 Hz firing rate in the absence of NO-IO pathway)
+objref rngIONex, rngIONexst
+rngIONex = new Random(IONexrnd)
+rngIONex.uniform(350,650)
+rngIONexst = new Random(IONexstrnd)
+rngIONexst.uniform(50,200)
+objref EX2ION_syn_exc[8], EX2IONns[8], EX2IONnsnc[8]
+for i = 0,7 {
+IONcell[i] EX2ION_syn_exc[i] = new NoisyExp2Syn(0.35)
+EX2ION_syn_exc[i].tau1 = 2 // (ms)
+EX2ION_syn_exc[i].tau2 = 10 // (ms)
+EX2ION_syn_exc[i].e = 0
+IONcell[i] EX2IONns[i] = new NetStim(0.2)
+EX2IONns[i].number=1e4
+EX2IONns[i].interval=rngIONex.repick()
+EX2IONns[i].start=rngIONexst.repick()
+EX2IONns[i].noise=1
+IONcell[i] EX2IONnsnc[i] = new NetCon(EX2IONns[i], EX2ION_syn_exc[i], 0, 0, 1.5e-5)
+}
+
+// Membrane noise in IO
+objref ION_noisc, IONnoise[8]
+ION_noisc = new Random(IONrnd)
+ION_noisc.normal(0, 1e-5*noiseSwitch)
+for i = 0,7 {
+IONcell[i] IONnoise[i] = new NoisyCurrent(0.2)
+ION_noisc.play(&IONnoise[i].noise)
+}

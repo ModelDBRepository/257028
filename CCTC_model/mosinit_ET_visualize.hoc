@@ -1,0 +1,92 @@
+/* Author: Xu Zhang @UConn, Jan., 2019
+Standard CCTC model under one typical ET condition as indicated in Figure 3A
+DCN activity during tremor follows Figures 3B-E (ET).
+*/
+
+load_file("nrngui.hoc")
+
+load_file("rngRead.hoc") // Load rng seeds
+noiseSwitch=1 // Membrane and synaptic noises, 1/0 = turn on/off
+dt = 0.0125 // Cannot be set larger, otherwise ION and DCN would have different dynamics
+v_init = -57
+tstop = 10000 // Simulation period
+
+// Loading individual cells
+load_file("cell_ION.hoc")
+load_file("cell_PC.hoc")
+load_file("cell_DCN.hoc")
+load_file("cell_TC.hoc")
+load_file("cell_MC.hoc")
+
+// Loading synaptic connections
+load_file("syn_ION_PC.hoc")
+load_file("syn_PC_DCN.hoc")
+load_file("syn_DCN_ION.hoc")
+load_file("syn_DCN_TC.hoc")
+load_file("syn_TC_MC.hoc")
+load_file("syn_MC_GrL.hoc")
+load_file("syn_GrL_PC.hoc")
+
+// One typical ET condition (tau = 12, R = 0.7)
+for i = 0,39 {
+	PC2DCN_syn[i].tau = 12
+	PC2DCN_syn[i].g = PC2DCN_syn[i].g*0.7
+}
+
+// Push ION into oscillations
+objref stimION[8]
+for i = 0,7 {
+	IONcell[i] stimION[i] = new IClamp(0.5)
+	stimION[i].amp = 5e-3
+	stimION[i].del = 1000
+	stimION[i].dur = 20
+}
+
+access DCNcell
+
+// Record PC (Must be included)
+objref rec_v_PC[40]
+for i = 0,39 {
+	rec_v_PC[i] = new Vector()
+	rec_v_PC[i].record(&PCcell[i].v(0.5))
+}
+
+
+objectvar Vplot1, Vplot2 //, Vplot3
+{
+Vplot1 = new Graph(0)
+Vplot1.size(0,tstop,-100,80)
+{Vplot1.view(0, -100, tstop, 180, 500, 50, 700, 180)}
+graphList[0].append(Vplot1)
+Vplot1.save_name("graphList[0].")
+Vplot1.addvar("PCcell[0].v( 0.5 )", 1, 1, 0.8, 0.9, 2)
+Vplot1.addvar("DCNcell.v( 0.5 )", 2, 1, 0.8, 0.9, 2)
+}
+{
+Vplot2 = new Graph(0)
+Vplot2.size(0,tstop,-100,80)
+{Vplot2.view(0, -100, tstop, 180, 500, 450, 700, 180)}
+graphList[0].append(Vplot2)
+Vplot2.save_name("graphList[0].")
+// Vplot2.addvar("PJ_DCN_syn[0].s", 1, 1, 0.8, 0.9, 2)
+Vplot2.addvar("IONcell[0].v( 0.5 )", 1, 1, 0.8, 0.9, 2)
+}
+
+
+//////////////////////////////////////////////////////////////////
+// Simulation starts											//
+//																//
+// Set up synaptic transmission delays between PC-DCN and PC-NO	//
+proc advance() {
+	if (t>PC2DCN_delay) {
+		for i = 0,39 {
+			PC2DCN_syn[i].vpre = rec_v_PC[i].x[rec_v_PC[i].size()-PC2DCN_delay/dt] // PC2DCN_delay defined in syn_PC_DCN.hoc
+			PC2NO_syn[i].vpre = rec_v_PC[i].x[rec_v_PC[i].size()-PC2NO_delay/dt]
+		}
+	}
+	fadvance()
+}
+//																//
+run()															//
+//																//
+//////////////////////////////////////////////////////////////////

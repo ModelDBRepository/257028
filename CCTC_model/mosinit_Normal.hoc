@@ -1,0 +1,385 @@
+/* Author: Xu Zhang @UConn, Jan., 2019
+Standard CCTC model under Normal condition
+Spike times of every cell, membrane voltage traces of all IONs
+and one of the PCs (no.19 of 0-39) are recorded and saved inside the
+"./recordings/NORM/" folder.
+*/
+
+load_file("nrngui.hoc")
+
+load_file("rngRead.hoc") // Load rng seeds
+noiseSwitch=1 // Membrane and synaptic noises, 1/0 = turn on/off
+dt = 0.0125 // Cannot be set larger, otherwise ION and DCN would have different dynamics
+v_init = -57
+tstop = 6000 // Simulation period
+
+// Loading individual cells
+load_file("cell_ION.hoc")
+load_file("cell_PC.hoc")
+load_file("cell_DCN.hoc")
+load_file("cell_TC.hoc")
+load_file("cell_MC.hoc")
+
+// Loading synaptic connections
+load_file("syn_ION_PC.hoc")
+load_file("syn_PC_DCN.hoc")
+load_file("syn_DCN_ION.hoc")
+load_file("syn_DCN_TC.hoc")
+load_file("syn_TC_MC.hoc")
+load_file("syn_MC_GrL.hoc")
+load_file("syn_GrL_PC.hoc")
+
+// (Try to) push ION into oscillations
+objref stimION[8]
+for i = 0,7 {
+	IONcell[i] stimION[i] = new IClamp(0.5)
+	stimION[i].amp = 5e-3
+	stimION[i].del = 1000
+	stimION[i].dur = 20
+}
+
+access DCNcell
+
+// Record PC (Must be included)
+objref rec_v_PC[40]
+for i = 0,39 {
+	rec_v_PC[i] = new Vector()
+	rec_v_PC[i].record(&PCcell[i].v(0.5))
+}
+
+// Record PC APs
+objref apc_PC[40], apPC[40]
+for i = 0,39 {
+	PCcell[i] apc_PC[i] = new APCount(0.5)
+	apc_PC[i].thresh = -45
+	apPC[i] = new Vector()
+	apc_PC[i].record(apPC[i])
+}
+
+// Record ION
+objref apc_ION[8], apION[8]
+for i = 0,7 {
+	IONcell[i] apc_ION[i] = new APCount(0.5)
+	apc_ION[i].thresh = -45
+	apION[i] = new Vector()
+	apc_ION[i].record(apION[i])
+}
+
+// Record ION membrane voltage
+objref rec_v_ION[8]
+for i = 0,7 {
+	rec_v_ION[i] = new Vector()
+	rec_v_ION[i].record(&IONcell[i].v(0.5))
+}
+
+// Record GrL
+objref apGrC[4]
+for i = 0,3 {
+	apGrC[i] = new Vector()
+	syn_grcsc_ampa[i].record(apGrC[i])
+}
+objref apGoC[4]
+for i = 0,3 {
+	apGoC[i] = new Vector()
+	syn_gocgrc_gaba[i].record(apGoC[i])
+}
+objref apSTL[4]
+for i = 0,3 {
+	apSTL[i] = new Vector()
+	syn_scgoc_gaba[i].record(apSTL[i])
+}
+
+// Record NO
+objref apc_NO, apNO
+NOcell apc_NO = new APCount(0.5)
+apc_NO.thresh = -30
+apNO = new Vector()
+apc_NO.record(apNO)
+
+// Record DCN
+objref apc_DCN, apDCN
+DCNcell apc_DCN = new APCount(0.5)
+apc_DCN.thresh = -30
+apDCN = new Vector()
+apc_DCN.record(apDCN)
+
+// Record DCN
+objref rec_v_DCN
+rec_v_DCN = new Vector()
+rec_v_DCN.record(&DCNcell.v(0.5))
+
+// Record NO
+objref rec_v_NO
+rec_v_NO = new Vector()
+rec_v_NO.record(&NOcell.v(0.5))
+
+// Record Vim
+objref apc_Vim, apVim
+TCcell apc_Vim = new APCount(0.5)
+apc_Vim.thresh = -30
+apVim = new Vector()
+apc_Vim.record(apVim)
+
+// Record Vim
+objref rec_v_Vim
+rec_v_Vim = new Vector()
+rec_v_Vim.record(&TCcell.v(0.5))
+
+// Record PYN
+objref apc_PYN[20], apPYN[20]
+for i = 0,19 {
+	PYcell[i] apc_PYN[i] = new APCount(0.5)
+	apc_PYN[i].thresh = -30
+	apPYN[i] = new Vector()
+	apc_PYN[i].record(apPYN[i])
+}
+
+// Record FSI
+objref apc_FSI[2], apFSI[2]
+for i = 0,1 {
+	FScell[i] apc_FSI[i] = new APCount(0.5)
+	apc_FSI[i].thresh = -30
+	apFSI[i] = new Vector()
+	apc_FSI[i].record(apFSI[i])
+}
+
+
+//////////////////////////////////////////////////////////////////
+// Simulation starts											//
+//																//
+// Set up synaptic transmission delays between PC-DCN and PC-NO	//
+proc advance() {
+	if (t>PC2DCN_delay) {
+		for i = 0,39 {
+			PC2DCN_syn[i].vpre = rec_v_PC[i].x[rec_v_PC[i].size()-PC2DCN_delay/dt] // PC2DCN_delay defined in syn_PC_DCN.hoc
+			PC2NO_syn[i].vpre = rec_v_PC[i].x[rec_v_PC[i].size()-PC2NO_delay/dt]
+		}
+	}
+	fadvance()
+}
+//																//
+run()															//
+//																//
+//////////////////////////////////////////////////////////////////
+
+// Save PC (Just one PC)
+objref sav_v_PC
+sav_v_PC = new File()
+sav_v_PC.wopen("recordings/NORM/PC_v_all.txt")
+rec_v_PC[19].printf(sav_v_PC)
+sav_v_PC.close()
+
+// Save PC APs
+objref rec_PC
+rec_PC = new File()
+rec_PC.wopen("recordings/NORM/ap_PC.txt")
+for i = 0,39 {
+	for j = 0,apPC[i].size()-1 {
+		if (apPC[i].size()>0) {
+			rec_PC.printf("%d,%f\n",i,apPC[i].x(j)) // Column 1 indicates no. of the PC (0-39) that corresponds to the AP (Column 2)
+		}
+	}
+}
+rec_PC.close()
+
+// Save ION APs
+objref rec_ION
+rec_ION = new File()
+rec_ION.wopen("recordings/NORM/ap_ION.txt")
+for i = 0,7 {
+	for j = 0,apION[i].size()-1 {
+		if (apION[i].size()>0) {
+			rec_ION.printf("%d,%f\n",i,apION[i].x(j)) // Column 1 indicates no. of the ION (0-7) that corresponds to the AP (Column 2)
+		}
+	}
+}
+rec_ION.close()
+
+// Save ION
+objref sav_v_ION[8]
+
+sav_v_ION[0] = new File()
+sav_v_ION[0].wopen("recordings/NORM/ION_v_all_0.txt")
+rec_v_ION[0].printf(sav_v_ION[0])
+sav_v_ION[0].close()
+
+sav_v_ION[1] = new File()
+sav_v_ION[1].wopen("recordings/NORM/ION_v_all_1.txt")
+rec_v_ION[1].printf(sav_v_ION[1])
+sav_v_ION[1].close()
+
+sav_v_ION[2] = new File()
+sav_v_ION[2].wopen("recordings/NORM/ION_v_all_2.txt")
+rec_v_ION[2].printf(sav_v_ION[2])
+sav_v_ION[2].close()
+
+sav_v_ION[3] = new File()
+sav_v_ION[3].wopen("recordings/NORM/ION_v_all_3.txt")
+rec_v_ION[3].printf(sav_v_ION[3])
+sav_v_ION[3].close()
+
+sav_v_ION[4] = new File()
+sav_v_ION[4].wopen("recordings/NORM/ION_v_all_4.txt")
+rec_v_ION[4].printf(sav_v_ION[4])
+sav_v_ION[4].close()
+
+sav_v_ION[5] = new File()
+sav_v_ION[5].wopen("recordings/NORM/ION_v_all_5.txt")
+rec_v_ION[5].printf(sav_v_ION[5])
+sav_v_ION[5].close()
+
+sav_v_ION[6] = new File()
+sav_v_ION[6].wopen("recordings/NORM/ION_v_all_6.txt")
+rec_v_ION[6].printf(sav_v_ION[6])
+sav_v_ION[6].close()
+
+sav_v_ION[7] = new File()
+sav_v_ION[7].wopen("recordings/NORM/ION_v_all_7.txt")
+rec_v_ION[7].printf(sav_v_ION[7])
+sav_v_ION[7].close()
+
+// Save GrC
+objref f_GrC[8]
+
+f_GrC[0] = new File()
+f_GrC[0].wopen("recordings/NORM/apGrC_0.txt")
+apGrC[0].printf(f_GrC[0])
+f_GrC[0].close()
+
+f_GrC[1] = new File()
+f_GrC[1].wopen("recordings/NORM/apGrC_1.txt")
+apGrC[1].printf(f_GrC[1])
+f_GrC[1].close()
+
+f_GrC[2] = new File()
+f_GrC[2].wopen("recordings/NORM/apGrC_2.txt")
+apGrC[2].printf(f_GrC[2])
+f_GrC[2].close()
+
+f_GrC[3] = new File()
+f_GrC[3].wopen("recordings/NORM/apGrC_3.txt")
+apGrC[3].printf(f_GrC[3])
+f_GrC[3].close()
+
+// Save GoC
+objref f_GoC[8]
+
+f_GoC[0] = new File()
+f_GoC[0].wopen("recordings/NORM/apGoC_0.txt")
+apGoC[0].printf(f_GoC[0])
+f_GoC[0].close()
+
+f_GoC[1] = new File()
+f_GoC[1].wopen("recordings/NORM/apGoC_1.txt")
+apGoC[1].printf(f_GoC[1])
+f_GoC[1].close()
+
+f_GoC[2] = new File()
+f_GoC[2].wopen("recordings/NORM/apGoC_2.txt")
+apGoC[2].printf(f_GoC[2])
+f_GoC[2].close()
+
+f_GoC[3] = new File()
+f_GoC[3].wopen("recordings/NORM/apGoC_3.txt")
+apGoC[3].printf(f_GoC[3])
+f_GoC[3].close()
+
+// Save STL
+objref f_STL[8]
+
+f_STL[0] = new File()
+f_STL[0].wopen("recordings/NORM/apSTL_0.txt")
+apSTL[0].printf(f_STL[0])
+f_STL[0].close()
+
+f_STL[1] = new File()
+f_STL[1].wopen("recordings/NORM/apSTL_1.txt")
+apSTL[1].printf(f_STL[1])
+f_STL[1].close()
+
+f_STL[2] = new File()
+f_STL[2].wopen("recordings/NORM/apSTL_2.txt")
+apSTL[2].printf(f_STL[2])
+f_STL[2].close()
+
+f_STL[3] = new File()
+f_STL[3].wopen("recordings/NORM/apSTL_3.txt")
+apSTL[3].printf(f_STL[3])
+f_STL[3].close()
+
+// Save NO
+objref NO_all
+NO_all = new Vector()
+objref rec_NO
+rec_NO = new File()
+NO_all.append(apNO)
+rec_NO.wopen("recordings/NORM/ap_NO.txt")
+NO_all.printf(rec_NO)
+rec_NO.close()
+
+// Save DCN
+objref DCN_all
+DCN_all = new Vector()
+objref rec_DCN
+rec_DCN = new File()
+DCN_all.append(apDCN)
+rec_DCN.wopen("recordings/NORM/ap_DCN.txt")
+DCN_all.printf(rec_DCN)
+rec_DCN.close()
+
+// Save DCN
+objref sav_v_DCN
+sav_v_DCN = new File()
+sav_v_DCN.wopen("recordings/NORM/DCN_v_all.txt")
+rec_v_DCN.printf(sav_v_DCN)
+sav_v_DCN.close()
+
+// Save NO
+objref sav_v_NO
+sav_v_NO = new File()
+sav_v_NO.wopen("recordings/NORM/NO_v_all.txt")
+rec_v_NO.printf(sav_v_NO)
+sav_v_NO.close()
+
+// Save Vim
+objref Vim_all
+Vim_all = new Vector()
+objref rec_Vim
+rec_Vim = new File()
+Vim_all.append(apVim)
+rec_Vim.wopen("recordings/NORM/ap_Vim.txt")
+Vim_all.printf(rec_Vim)
+rec_Vim.close()
+
+// Save Vim
+objref sav_v_Vim
+sav_v_Vim = new File()
+sav_v_Vim.wopen("recordings/NORM/Vim_v_all.txt")
+rec_v_Vim.printf(sav_v_Vim)
+sav_v_Vim.close()
+
+// Save PYN
+objref PYN_all
+PYN_all = new Vector()
+objref rec_PYN
+rec_PYN = new File()
+for i = 0,19 {
+	PYN_all.append(apPYN[i])
+}
+rec_PYN.wopen("recordings/NORM/ap_PYN.txt")
+PYN_all.printf(rec_PYN)
+rec_PYN.close()
+
+// Save FSI
+objref FSI_all
+FSI_all = new Vector()
+objref rec_FSI
+rec_FSI = new File()
+for i = 0,1 {
+	FSI_all.append(apFSI[i])
+}
+rec_FSI.wopen("recordings/NORM/ap_FSI.txt")
+FSI_all.printf(rec_FSI)
+rec_FSI.close()
+
+// quit()
