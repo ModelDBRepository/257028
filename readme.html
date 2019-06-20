@@ -15,17 +15,23 @@
 <p>2) Ensure the directories &quot;recordings/ET&quot;, &quot;recordings/ET_VimDBS&quot;, &quot;recordings/NORM&quot;,  &quot;recordings/HARMALINE&quot; exist (create them if not), so data can be stored after  simulation ends.</p>
 
 <p>3) &quot;mosinit_ET.hoc&quot;, &quot;mosinit_ET_VimDBS.hoc&quot;, &quot;mosinit_Normal.hoc&quot;, &quot;mosinit_Harmaline.hoc&quot;  correspond to ET (essential tremor), ET with 185-Hz Vim DBS, normal (tremor-free), and  harmaline tremor conditions, respectively. Each runs for 6,000 ms by default. Data are  stored in the folders specified above in 2) after simulation ends. ET-related parameters  (i.e., synaptic properties in the PC->DCN synapse) are specified in Rows 46 and 47 in  &quot;mosinit_ET.hoc&quot; and &quot;mosinit_ET_VimDBS.hoc&quot;.</p>
-
+<p/>
+In both mosinit_ET.hoc and mosinit_ET_VimDBS.hoc, a perturbation to all the ION cells is required to initiate tremor activity (at 1,500 ms in the scripts, see Rows 38-45)
+<p/>
 <p>4) For the data files, &quot;ap_xxx.txt&quot; refer to the spike times of neuron type xxx. Note that  ap_PC.txt and ap_ION.txt contain the spike times (2nd column) of all PC/ION neurons,  whereas the 1st column indicates the no. of the corresponding neuron; for GrL neurons  (GrC, GoC, STL), spike times are saved in different files for each neuron.  &quot;xxx_v_all_n.txt&quot; refers to the sampled membrane voltage trace of the nth neuron of type  xxx. Note that the sampling frequency is 80 Hz (step size: 0.0125 ms).</p>
 Example run:<br/>
 Under linux run the following in a terminal window:<p/>
 nrnivmodl modfiles<br/>
-nrngui ET_VimDBS.hoc<p/>
-nrngui ET.hoc<p/>
+nrngui mosinit_Haramline.hoc<p/>
+nrngui mosinit_Normal.hoc<p/>
 
-and then run the matlab file "plot_sample_v.m" in recordings/ET_VimDBS and recordings/ET to produce graphs similar to those in Figure 2 in the paper, e.g. 2F, G:<p/>
-<img src="./DCN_HARMALINE.png" alt="DCN HARMALINE" width="550"><p/>
-<img src="VimNormal2to3.png" alt="Vim Normal" width="550"><p/>
+(each mosinit_... program takes about 4 minutes to run on a 2015 intel
+i7 870 2.93Ghz Desktop) and then run the matlab file "plot_sample_v.m"
+in recordings/HARMALINE and recordings/NORM to produce graphs similar
+to those in Figure 2 in the paper, e.g. 2F, G:<p/>
+
+<img src="./fig2FDCN_mosinit_Harmaline.png" alt="DCN HARMALINE" width="550"><p/>
+<img src="./fig2GVim_mosinit_Normal.png" alt="Vim Normal" width="550"><p/>
 
 <p>5) Random seeds are stored in the file &quot;rngSeeds.txt&quot;, which randomizes certain parameters  each time the model is simulated.</p>
 
@@ -46,5 +52,4 @@ and then run the matlab file "plot_sample_v.m" in recordings/ET_VimDBS and recor
 <p>4) &quot;rngSeeds.txt&quot; and &quot;params_xxx.txt&quot; files by default would generate results similar to  Figure 6A (same connectivities but different rng seeds; tremor oscillations spread after  16 ION cells are perturbed, see rows 47-54 in &quot;mosinit_ET_scaleup.hoc&quot;). Modifying rng seeds  may require perturbing more ION cells initially.</p>
 
 <p>5) Connectivities can be modified by &quot;createConnections.m&quot; in MATLAB, which overwrites  &quot;params_xxx.txt&quot; files. If the connectivities are modified, the group of ION cells that are  most sensitive (i.e., their oscillations spread to other cells) may change, and the minimum  number of ION cells that needs to be perturbed should be determined again.</p>
-
 </html>
